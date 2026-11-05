@@ -17,6 +17,7 @@
 
 import os
 from datetime import datetime
+import IA
 
 # ==============================================================================
 # PARTE 1 de 6 - BASE DO SISTEMA
@@ -461,6 +462,10 @@ def menu_usuarios():
             revelar_matricula()
         elif opcao == 6:
             alternar_bloqueio()
+        elif opcao == 7:
+            pergunta = input("  Pergunte algo pra IA: ")
+            print(IA.perguntar_IA(pergunta))
+    
         pausar()
 
 
@@ -879,7 +884,8 @@ def menu_principal():
             elif opcao == 6:
                 em_desenvolvimento("Funcionalidade extra")
             elif opcao == 7:
-                print("\n  Espaço reservado para o módulo de IA (entrega futura).")
+                pergunta = input("  Pergunte algo pra IA: ")
+                print(IA.perguntar_ia(pergunta))
             pausar()
 
 
