@@ -115,6 +115,6 @@ Python 3, apenas com bibliotecas padrão: os, datetime, random, json, urllib.req
 - João Filipe Revoredo silva Arruda
 - Eduardo Pedrosa Miranda
 - Matheus Didini Pereira Nogueira
-- Luciano Gabriel Sales
+- Luciano Gabriel De Oliveira Sales
 - João Guilherme Souza Gomes
 - Rhandom Shieu
