@@ -112,9 +112,9 @@ Python 3, apenas com bibliotecas padrão: os, datetime, random, json, urllib.req
 
 ## Grupo
 
-- João Filipe Revoredo silva Arruda
+- João Filipe Revoredo ilva Arruda
 - Eduardo Pedrosa Miranda
 - Matheus Didini Pereira Nogueira
 - Luciano Gabriel De Oliveira Sales
 - João Guilherme Souza Gomes
-- Rhandom Shieu
+- Rhandom Shiue de Souza Aguiar
