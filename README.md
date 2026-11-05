@@ -24,11 +24,13 @@ O SentinelaLog registra os acessos, classifica cada um por nível de risco, expl
 - **Auditoria:** toda operação relevante vai para um log, com operador, operação, usuário afetado e data/hora. Consulta pelo menu.
 - **Relatório de segurança:** total de acessos, falhas, usuários com mais falhas, horários mais movimentados (com gráfico em texto) e quantidade de acessos suspeitos e críticos.
 - **Persistência:** tudo é salvo em `.csv` e `.txt` na pasta `dados/` e continua disponível entre execuções.
-- **Reservado:** a opção 7 do menu está reservada para o módulo de IA que será integrado ao longo do semestre.
+- Assistente de IA: a opção 7 do menu usa o Groq (modelo openai/gpt-oss-20b) para responder perguntas e explicar riscos em linguagem simples. Só são enviados à IA textos digitados pelo operador ou dados fictícios do sistema, nunca dados reais de pessoas.
 
 ## Como executar
 
 Requisito: Python 3, sem instalar nenhuma biblioteca.
+
+Para usar a opção 7 (IA), é preciso ter uma chave de API do Groq (console.groq.com) salva na variável de ambiente GROQ_API_KEY. No Windows: setx GROQ_API_KEY "sua_chave" (depois, abrir um terminal novo). A chave nunca fica no código. Sem a chave, o resto do sistema funciona normalmente e a opção 7 avisa que a chave não foi encontrada.
 
 ```bash
 python sentinelalog.py
@@ -92,6 +94,7 @@ dados/                   # criada automaticamente
   auditoria.csv
   maquinas_bloqueadas.txt
   relatorio_*.txt        # relatórios exportados
+IA.py                    # módulo do assistente de IA (Groq)
 ```
 
 O código está dividido em 6 partes, cada uma explicada por comentários:
@@ -105,7 +108,7 @@ O código está dividido em 6 partes, cada uma explicada por comentários:
 
 ## Tecnologias
 
-Python 3, apenas com as bibliotecas `os`, `datetime` e `random`. O código usa condicionais, laços, funções, listas e manipulação de arquivos.
+Python 3, apenas com bibliotecas padrão: os, datetime, random, json, urllib.request e urllib.error. Não é preciso instalar nada. O código usa condicionais, laços, funções, listas e manipulação de arquivos. O módulo de IA fica no arquivo IA.py e é chamado pelo menu principal.
 
 ## Grupo
 
