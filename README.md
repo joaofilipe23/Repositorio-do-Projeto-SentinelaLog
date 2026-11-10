@@ -2,7 +2,7 @@
 
 # SentinelaLog
 
-Monitor de acessos e detecção de anomalias para um laboratório de informática escolar, feito em Python e executado pelo terminal.
+O SentinelaLog é um sistema desenvolvido em Python para monitorar acessos em laboratórios de informática escolares, identificar comportamentos suspeitos e gerar alerta de segurança.
 
 Projeto da disciplina **Fundamentos de Programação (2026-2, Turma B)**.
 
