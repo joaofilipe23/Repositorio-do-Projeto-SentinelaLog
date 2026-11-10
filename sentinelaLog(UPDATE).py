@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import secrets
 import getpass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 try:
     import IA
@@ -26,6 +26,7 @@ A_ID, A_MATRICULA, A_DATA, A_MAQUINA, A_RESULTADO, A_CLASSE, A_PONTOS, A_MOTIVOS
 
 ARQ_OPERADORES = os.path.join(PASTA_DADOS, "operadores.csv")
 
+
 NIVEIS = ["observador", "operador", "administrador", "superadmin"]
 DESCRICAO_NIVEIS = [
     "só consulta (acessos, listas e usuários com matrícula mascarada)",
@@ -34,13 +35,20 @@ DESCRICAO_NIVEIS = [
     "acesso total; gerencia qualquer operador e vê tentativas de invasão",
 ]
 NIVEL_MAXIMO = len(NIVEIS)
-O_LOGIN, O_NOME, O_NIVEL, O_SAL, O_HASH, O_ATIVO, O_FALHAS, O_TROCAR = 0, 1, 2, 3, 4, 5, 6, 7
+O_LOGIN, O_NOME, O_NIVEL, O_SAL, O_HASH, O_ATIVO, O_FALHAS, O_TROCAR, O_BLOQUEIO = 0, 1, 2, 3, 4, 5, 6, 7, 8
 S_LOGIN, S_NOME, S_NIVEL = 0, 1, 2
 SESSAO = ["", "", 0]
 ITERACOES_HASH = 200000
 LIMITE_FALHAS_LOGIN = 3
 TENTATIVAS_POR_SESSAO = 3
 TAMANHO_MIN_SENHA = 8
+FORMATO_SEGUNDOS = "%Y-%m-%d %H:%M:%S"
+
+SUPERADMIN_LOGIN = "joao arruda"
+SUPERADMIN_NOME = "João Arruda"
+SUPERADMIN_SAL = "97bbfdd7e066d8df7786938a887ae547"
+SUPERADMIN_HASH = "41b3a3eef6c49ad51331d67b14255dfa8dcaa79d401512df4b593d2c09fb5e03"
+TEMPO_BLOQUEIO_SUPER_MIN = 10
 P_CODIGO, P_DESCRICAO, P_NIVEL = 0, 1, 2
 PERMISSOES = [
     ["usuarios_listar", "Listar usuários (matrícula mascarada)", 1],
@@ -219,6 +227,10 @@ def escolher_opcao(titulo, opcoes, texto_zero="Voltar"):
     print(f"  0. {texto_zero}")
     return ler_inteiro("\nEscolha uma opção: ", 0, len(opcoes))
 
+
+# =====================================================================
+# CONTROLE DE ACESSO: permissões, senhas, login e gestão de operadores
+# =====================================================================
 def nome_nivel(nivel):
     if nivel < 1 or nivel > NIVEL_MAXIMO:
         return "sem sessão"
@@ -229,7 +241,7 @@ def nivel_minimo(codigo):
     for p in PERMISSOES:
         if p[P_CODIGO] == codigo:
             return p[P_NIVEL]
-    return NIVEL_MAXIMO          
+    return NIVEL_MAXIMO          # código desconhecido: só o nível mais alto (falha segura)
 
 
 def tem_permissao(codigo):
@@ -277,6 +289,7 @@ def nivel_maximo_atribuivel():
     return SESSAO[S_NIVEL] - 1
 
 
+# ---------- senhas ----------
 def gerar_hash(senha, sal):
     return hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), bytes.fromhex(sal), ITERACOES_HASH).hex()
 
@@ -297,11 +310,11 @@ def senha_valida(senha):
 
 
 def gerar_senha_temporaria():
-    return secrets.token_hex(5)
+    return secrets.token_hex(5)          # 10 caracteres aleatórios
 
 
 def ler_senha(mensagem):
-    return getpass.getpass(mensagem)
+    return getpass.getpass(mensagem)     # não mostra o que é digitado
 
 
 def ler_nova_senha():
@@ -321,19 +334,21 @@ def definir_senha(operador, senha, trocar):
     operador[O_HASH] = gerar_hash(senha, operador[O_SAL])
     operador[O_TROCAR] = trocar
     operador[O_FALHAS] = "0"
+    operador[O_BLOQUEIO] = "0"
 
 
 def montar_operador(login, nome, nivel, senha, trocar):
-    operador = [login, nome, str(nivel), "", "", "1", "0", trocar]
+    operador = [login, nome, str(nivel), "", "", "1", "0", trocar, "0"]
     definir_senha(operador, senha, trocar)
     return operador
-
 
 
 def carregar_operadores():
     operadores = []
     for linha in ler_linhas(ARQ_OPERADORES):
-        if len(linha) == 8 and linha[O_NIVEL].isdigit() and linha[O_FALHAS].isdigit():
+        if len(linha) == 8:                
+            linha.append("0")
+        if len(linha) == 9 and linha[O_NIVEL].isdigit() and linha[O_FALHAS].isdigit():
             if 1 <= int(linha[O_NIVEL]) <= NIVEL_MAXIMO:
                 operadores.append(linha)
     return operadores
@@ -368,20 +383,41 @@ def ler_login_novo(operadores):
         else:
             return login
 
-def criar_primeiro_superadmin():
-    print("\n--- Primeira execução: criar o superadministrador ---")
-    print("  Esta conta tem acesso total e cria todas as outras. Guarde bem a senha!")
-    login = ler_login_novo([])
-    nome = ler_texto("  Nome completo: ", True, 40)
-    senha = ler_nova_senha()
-    if not salvar_operadores([montar_operador(login, nome, NIVEL_MAXIMO, senha, "0")]):
+
+# ---------- primeira execução e login ----------
+def eh_superadmin_fixo(login):
+    return login == SUPERADMIN_LOGIN
+
+
+def garantir_superadmin_fixo():
+    """Cria ou restaura a conta do superadmin fixo. Roda toda vez que o programa abre:
+    se alguém tiver editado o operadores.csv, o que foi mexido volta ao valor do código
+    e o fato fica registrado na auditoria."""
+    operadores = carregar_operadores()
+    posicao = buscar_operador(SUPERADMIN_LOGIN, operadores)
+    esperado = [SUPERADMIN_LOGIN, SUPERADMIN_NOME, str(NIVEL_MAXIMO), SUPERADMIN_SAL, SUPERADMIN_HASH, "1"]
+    nomes_campos = ["login", "nome", "nível", "sal", "senha", "status"]
+    if posicao == -1:
+        operadores.append(esperado + ["0", "0", "0"])
+        operacao = "SUPERADMIN_CRIADO"
+        detalhe = "conta fixa do sistema"
+    else:
+        atual = operadores[posicao]
+        diferentes = []
+        for i in range(len(esperado)):
+            if atual[i] != esperado[i]:
+                diferentes.append(nomes_campos[i])
+                atual[i] = esperado[i]
+        if atual[O_TROCAR] != "0":
+            diferentes.append("troca de senha")
+            atual[O_TROCAR] = "0"
+        if len(diferentes) == 0:
+            return True
+        operacao = "SUPERADMIN_RESTAURADO"
+        detalhe = "alterado fora do sistema: " + ", ".join(diferentes)
+    if not salvar_operadores(operadores):
         return False
-    SESSAO[S_LOGIN] = login
-    SESSAO[S_NOME] = nome
-    SESSAO[S_NIVEL] = NIVEL_MAXIMO
-    OPERADOR[0] = login
-    registrar_auditoria("OPERADOR_CRIADO", login, "nivel=superadmin (primeira execução)")
-    print("  Superadministrador criado. Você já está dentro do sistema.")
+    registrar_auditoria(operacao, SUPERADMIN_LOGIN, detalhe)
     return True
 
 
@@ -399,30 +435,49 @@ def trocar_senha_obrigatoria(operadores, posicao):
             return
 
 
+def liberar_se_bloqueio_expirou(operador):
+    """O bloqueio do superadmin fixo é temporário; os demais só são liberados por um nível acima."""
+    if eh_superadmin_fixo(operador[O_LOGIN]) and int(operador[O_FALHAS]) >= LIMITE_FALHAS_LOGIN:
+        if operador[O_BLOQUEIO] <= datetime.now().strftime(FORMATO_SEGUNDOS):
+            operador[O_FALHAS] = "0"
+            operador[O_BLOQUEIO] = "0"
+
+
 def tentar_login(login, senha):
+    """Devolve: 'ok', 'erro' (1º erro), 'aviso' (2º erro), 'bloqueou' (3º erro) ou 'bloqueada' (já estava)."""
     operadores = carregar_operadores()
     posicao = buscar_operador(login, operadores)
     if posicao == -1:
         registrar_auditoria("LOGIN_FALHA", limpar_campo(login), "login inexistente")
-        return False
+        return "erro"
     operador = operadores[posicao]
+    liberar_se_bloqueio_expirou(operador)
     if operador[O_ATIVO] != "1":
         registrar_auditoria("LOGIN_FALHA", login, "conta desativada")
-        return False
+        return "erro"
     if int(operador[O_FALHAS]) >= LIMITE_FALHAS_LOGIN:
-        registrar_auditoria("LOGIN_FALHA", login, "conta bloqueada por tentativas")
-        return False
+        registrar_auditoria("LOGIN_FALHA", login, "tentativa em conta bloqueada")
+        return "bloqueada"
+
     if not senha_confere(senha, operador[O_SAL], operador[O_HASH]):
-        operador[O_FALHAS] = str(int(operador[O_FALHAS]) + 1)
-        salvar_operadores(operadores)
-        detalhe = f"senha incorreta ({operador[O_FALHAS]}/{LIMITE_FALHAS_LOGIN})"
-        if int(operador[O_FALHAS]) >= LIMITE_FALHAS_LOGIN:
+        falhas = int(operador[O_FALHAS]) + 1
+        operador[O_FALHAS] = str(falhas)
+        detalhe = f"senha incorreta ({falhas}/{LIMITE_FALHAS_LOGIN})"
+        if falhas >= LIMITE_FALHAS_LOGIN:
+            if eh_superadmin_fixo(login):
+                libera_em = datetime.now() + timedelta(minutes=TEMPO_BLOQUEIO_SUPER_MIN)
+                operador[O_BLOQUEIO] = libera_em.strftime(FORMATO_SEGUNDOS)
+            salvar_operadores(operadores)
             registrar_auditoria("CONTA_BLOQUEADA_LOGIN", login, detalhe)
-        else:
-            registrar_auditoria("LOGIN_FALHA", login, detalhe)
-        return False
+            return "bloqueou"
+        salvar_operadores(operadores)
+        registrar_auditoria("LOGIN_FALHA", login, detalhe)
+        if falhas == LIMITE_FALHAS_LOGIN - 1:
+            return "aviso"
+        return "erro"
 
     operador[O_FALHAS] = "0"
+    operador[O_BLOQUEIO] = "0"
     salvar_operadores(operadores)
     SESSAO[S_LOGIN] = login
     SESSAO[S_NOME] = operador[O_NOME]
@@ -432,26 +487,45 @@ def tentar_login(login, senha):
     if operador[O_TROCAR] == "1":
         print("\n  Sua senha é temporária. Defina uma nova senha para continuar.")
         trocar_senha_obrigatoria(operadores, posicao)
-    return True
+    return "ok"
 
 
 def autenticar():
-    if len(carregar_operadores()) == 0:
-        return criar_primeiro_superadmin()
     print("--- Login ---")
     for tentativa in range(TENTATIVAS_POR_SESSAO):
         login = ler_texto("  Login: ", True, 20).lower()
         senha = ler_senha("  Senha: ")
-        if tentar_login(login, senha):
+        resultado = tentar_login(login, senha)
+        if resultado == "ok":
             print(f"\n  Bem-vindo(a), {SESSAO[S_NOME]}! Nível: {nome_nivel(SESSAO[S_NIVEL])}.")
             return True
-        print("  Login ou senha incorretos, ou conta bloqueada/desativada. Procure um administrador.")
+        if resultado == "aviso":
+            print("  [ATENÇÃO] Você errou a senha 2 vezes. Mais um erro e a conta será BLOQUEADA.")
+        elif resultado == "bloqueou":
+            print("  [CONTA BLOQUEADA] Senha incorreta 3 vezes seguidas.")
+            if eh_superadmin_fixo(login):
+                print(f"  Por segurança, ela só poderá ser usada de novo em {TEMPO_BLOQUEIO_SUPER_MIN} minutos.")
+            else:
+                print("  Procure um operador de nível superior ao seu para desbloquear.")
+            return False
+        elif resultado == "bloqueada":
+            print("  [CONTA BLOQUEADA] Esta conta está bloqueada por excesso de tentativas.")
+            if eh_superadmin_fixo(login):
+                print(f"  Aguarde o fim do bloqueio temporário ({TEMPO_BLOQUEIO_SUPER_MIN} minutos após o 3º erro).")
+            else:
+                print("  Procure um operador de nível superior ao seu para desbloquear.")
+            return False
+        else:
+            print("  Login ou senha incorretos.")
     print("  Número máximo de tentativas atingido. Encerrando.")
     return False
 
 
 def alterar_minha_senha():
     if not exigir("conta_propria"):
+        return
+    if eh_superadmin_fixo(SESSAO[S_LOGIN]):
+        print("  A senha do superadmin é fixa (definida no código) e não pode ser alterada por aqui.")
         return
     operadores = carregar_operadores()
     posicao = buscar_operador(SESSAO[S_LOGIN], operadores)
@@ -508,13 +582,18 @@ def listar_operadores(operadores):
     print("-" * 80)
     for i in range(len(operadores)):
         o = operadores[i]
+        liberar_se_bloqueio_expirou(o)
         status = "ativo"
         if o[O_ATIVO] != "1":
             status = "DESATIVADO"
         elif int(o[O_FALHAS]) >= LIMITE_FALHAS_LOGIN:
             status = "BLOQUEADO (tentativas)"
+            if eh_superadmin_fixo(o[O_LOGIN]):
+                status = f"BLOQUEADO até {o[O_BLOQUEIO][11:16]}"
         elif o[O_TROCAR] == "1":
             status = "ativo (senha temporária)"
+        if eh_superadmin_fixo(o[O_LOGIN]):
+            status += "  [conta fixa]"
         if o[O_LOGIN] == SESSAO[S_LOGIN]:
             status += "  <- você"
         print(f"{i + 1:>3}  {o[O_LOGIN]:<14}{o[O_NOME][:22]:<24}{nome_nivel(int(o[O_NIVEL])):<15}{status}")
@@ -526,7 +605,7 @@ def selecionar_operador(operadores, acao):
     return numero - 1
 
 
-def selecionar_operador_gerenciavel(operadores, acao):
+def selecionar_operador_gerenciavel(operadores, acao, permitir_fixo=False):
     """Escolhe um operador e aplica as regras da hierarquia. Devolve a posição ou -1."""
     posicao = selecionar_operador(operadores, acao)
     if posicao == -1:
@@ -534,6 +613,10 @@ def selecionar_operador_gerenciavel(operadores, acao):
     alvo = operadores[posicao]
     if alvo[O_LOGIN] == SESSAO[S_LOGIN]:
         print("  Você não pode fazer isso na sua própria conta (para a senha, use 'Minha conta').")
+        return -1
+    if eh_superadmin_fixo(alvo[O_LOGIN]) and not permitir_fixo:
+        print("  A conta do superadmin fixo é definida no código e não pode ser alterada pelo sistema.")
+        registrar_auditoria("ACESSO_NEGADO", alvo[O_LOGIN], f"conta fixa: acao={acao}")
         return -1
     if not pode_gerenciar(int(alvo[O_NIVEL])):
         print(f"  [HIERARQUIA] Você ('{nome_nivel(SESSAO[S_NIVEL])}') só gerencia operadores de nível inferior ao seu.")
@@ -619,14 +702,16 @@ def desbloquear_operador():
     if not exigir("operadores_gerenciar"):
         return
     operadores = carregar_operadores()
-    posicao = selecionar_operador_gerenciavel(operadores, "desbloquear")
+    posicao = selecionar_operador_gerenciavel(operadores, "desbloquear", True)
     if posicao == -1:
         return
     alvo = operadores[posicao]
+    liberar_se_bloqueio_expirou(alvo)
     if int(alvo[O_FALHAS]) < LIMITE_FALHAS_LOGIN:
         print("  Esta conta não está bloqueada por tentativas de login.")
         return
     alvo[O_FALHAS] = "0"
+    alvo[O_BLOQUEIO] = "0"
     if salvar_operadores(operadores):
         registrar_auditoria("OPERADOR_DESBLOQUEADO", alvo[O_LOGIN], "tentativas de login zeradas")
         print("  Conta desbloqueada.")
@@ -1323,6 +1408,8 @@ def main():
     mostrar_titulo("SENTINELALOG - Monitor de Acessos (PARCIAL)")
     print("  Sistema didático: use apenas dados fictícios.\n")
     if not preparar_arquivos():
+        return
+    if not garantir_superadmin_fixo():
         return
     try:
         if not autenticar():
