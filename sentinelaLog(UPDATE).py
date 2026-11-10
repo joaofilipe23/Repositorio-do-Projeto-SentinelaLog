@@ -7,7 +7,7 @@ from datetime import datetime
 
 try:
     import IA
-except ImportError:      # módulo de IA ausente: o resto do sistema continua funcionando
+except ImportError:
     IA = None
 
 PASTA_DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
@@ -26,20 +26,6 @@ A_ID, A_MATRICULA, A_DATA, A_MAQUINA, A_RESULTADO, A_CLASSE, A_PONTOS, A_MOTIVOS
 
 ARQ_OPERADORES = os.path.join(PASTA_DADOS, "operadores.csv")
 
-# ---------------------------------------------------------------------
-# CONTROLE DE ACESSO DOS OPERADORES (hierarquia)
-#
-# PERFIS (acima) descreve QUEM É MONITORADO (estudante, professor...).
-# NIVEIS (abaixo) descreve QUEM USA o SentinelaLog (os operadores).
-#
-#   nível 1  observador      só consulta
-#   nível 2  operador        consulta + registra acessos + bloqueia
-#   nível 3  administrador   administra usuários, vê a auditoria e
-#                            gerencia operadores de nível MENOR que o seu
-#   nível 4  superadmin      acesso total; gerencia qualquer operador
-#
-# Para mudar quem pode fazer o quê, edite só a tabela PERMISSOES.
-# ---------------------------------------------------------------------
 NIVEIS = ["observador", "operador", "administrador", "superadmin"]
 DESCRICAO_NIVEIS = [
     "só consulta (acessos, listas e usuários com matrícula mascarada)",
@@ -233,10 +219,6 @@ def escolher_opcao(titulo, opcoes, texto_zero="Voltar"):
     print(f"  0. {texto_zero}")
     return ler_inteiro("\nEscolha uma opção: ", 0, len(opcoes))
 
-
-# =====================================================================
-# CONTROLE DE ACESSO: permissões, senhas, login e gestão de operadores
-# =====================================================================
 def nome_nivel(nivel):
     if nivel < 1 or nivel > NIVEL_MAXIMO:
         return "sem sessão"
@@ -247,7 +229,7 @@ def nivel_minimo(codigo):
     for p in PERMISSOES:
         if p[P_CODIGO] == codigo:
             return p[P_NIVEL]
-    return NIVEL_MAXIMO          # código desconhecido: só o nível mais alto (falha segura)
+    return NIVEL_MAXIMO          
 
 
 def tem_permissao(codigo):
@@ -295,7 +277,6 @@ def nivel_maximo_atribuivel():
     return SESSAO[S_NIVEL] - 1
 
 
-# ---------- senhas ----------
 def gerar_hash(senha, sal):
     return hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), bytes.fromhex(sal), ITERACOES_HASH).hex()
 
@@ -316,11 +297,11 @@ def senha_valida(senha):
 
 
 def gerar_senha_temporaria():
-    return secrets.token_hex(5)          # 10 caracteres aleatórios
+    return secrets.token_hex(5)
 
 
 def ler_senha(mensagem):
-    return getpass.getpass(mensagem)     # não mostra o que é digitado
+    return getpass.getpass(mensagem)
 
 
 def ler_nova_senha():
@@ -348,7 +329,7 @@ def montar_operador(login, nome, nivel, senha, trocar):
     return operador
 
 
-# ---------- arquivo de operadores ----------
+
 def carregar_operadores():
     operadores = []
     for linha in ler_linhas(ARQ_OPERADORES):
@@ -387,8 +368,6 @@ def ler_login_novo(operadores):
         else:
             return login
 
-
-# ---------- primeira execução e login ----------
 def criar_primeiro_superadmin():
     print("\n--- Primeira execução: criar o superadministrador ---")
     print("  Esta conta tem acesso total e cria todas as outras. Guarde bem a senha!")
@@ -471,7 +450,6 @@ def autenticar():
     return False
 
 
-# ---------- minha conta ----------
 def alterar_minha_senha():
     if not exigir("conta_propria"):
         return
@@ -525,7 +503,6 @@ def menu_minha_conta():
         pausar()
 
 
-# ---------- gestão de operadores ----------
 def listar_operadores(operadores):
     print(f"\n{'Nº':>3}  {'Login':<14}{'Nome':<24}{'Nível':<15}Status")
     print("-" * 80)
