@@ -1,0 +1,46 @@
+Você é um(a) professor(a) de programação ajudando um grupo de estudantes. Crie o projeto "SentinelaLog", um monitor de acessos e detecção de anomalias para o laboratório de informática de uma escola, em Python, rodando no terminal.
+
+CONTEXTO
+Alguém acessou a conta de um professor às 3h da manhã e apagou arquivos. A responsável pelo laboratório (Ana) só descobriu dois dias depois e não sabia quem foi, de onde veio, nem se já tinha acontecido antes. O sistema registra acessos, classifica o risco, explica o motivo e alerta antes do estrago. É um projeto didático: use somente dados fictícios.
+
+REGRAS DE LINGUAGEM (obrigatórias)
+- Só Python sem bibliotecas extras. Permitidas: os, datetime e random.
+- Use somente o conteúdo básico da disciplina: if/elif/else, for, while, funções, listas e manipulação de arquivos. try/except é permitido só para tratar erros, como exige o projeto.
+- Não use dicionários, tuplas, lambda, compreensões de lista, enumerate, with, sorted(key=...), set, classes, nem imports entre arquivos.
+- Boas práticas: funções pequenas, nomes claros, sem repetição de código, constantes em MAIÚSCULAS, tratamento de exceções.
+- Reduza o código ao máximo, sem perder requisitos.
+
+ESTRUTURA
+Um único arquivo, dividido em 6 partes, cada uma com comentários # explicando o que faz:
+1. Base: constantes, leitura/gravação de arquivos, selo de integridade, auditoria, entradas validadas.
+2. Usuários: CRUD, matrícula mascarada, revelar matrícula.
+3. Acessos: registro, análise de risco, detecção de risco.
+4. Relatório de segurança e verificação de integridade.
+5. Funcionalidade extra (diferencial).
+6. Menu principal e programa principal.
+Usuários e acessos são listas de textos (uma linha do .csv), acessadas por constantes de posição (ex.: U_NOME, A_DATA).
+
+REQUISITOS FUNCIONAIS
+1. CRUD de usuários: nome, matrícula, perfil (estudante, professor, administrador), horário permitido (hora inicial e final, aceitando períodos que viram a noite) e observações. Na listagem, a matrícula aparece mascarada (dois primeiros caracteres + asteriscos). Opção específica para revelar a matrícula, que exige motivo e é registrada no log.
+2. Registro de acessos: usuário, data e hora, máquina de origem e resultado (sucesso ou falha). Acesso não pode ser editado nem excluído (o arquivo só recebe linhas novas no final). Consulta com filtros (últimos 20, por usuário, só suspeitos e críticos, por máquina) e opção de explicar a classificação de um acesso.
+3. Análise de risco por pontos, com explicação do motivo de cada ponto. Pesos: falha +10; fora do horário permitido +30; madrugada (00h às 05h59) +20 (além do anterior); professor/administrador com sucesso fora do horário +20; máquina na lista de bloqueio +70; matrícula não cadastrada +35; conta bloqueada usada +40; 3 ou mais falhas seguidas +25; mesma matrícula em máquinas diferentes em até 5 minutos +30. Total máximo 100. Normal: menos de 30. Suspeito: 30 a 69. Crítico: 70 ou mais.
+4. Arquivo maquinas_bloqueadas.txt (uma máquina por linha, # para comentários). O sistema avisa quando um acesso vem de uma delas e permite adicionar máquinas pelo menu.
+5. Detecção de risco: alertar quando a mesma máquina foi usada por mais de um usuário, dizendo quais. Bloqueio automático do usuário após 3 falhas seguidas.
+6. Auditoria: log com data/hora, operador, operação, usuário afetado e detalhe. O sistema pede o nome do operador ao abrir. Nunca gravar matrícula completa no log (só nome + matrícula mascarada). Revelar matrícula também é registrado. O log é consultável pelo menu.
+7. Persistência em .csv/.txt na pasta "dados/": usuarios.csv, acessos.csv, auditoria.csv, maquinas_bloqueadas.txt.
+8. Relatório de segurança: total de acessos, quantos falharam, usuários com mais falhas, horários com mais movimento (com gráfico em texto por hora, avisando movimento fora das 7h às 22h) e quantos acessos foram suspeitos ou críticos.
+9. Menu principal com a opção 7 reservada para um módulo de IA (arquivo IA.py fornecido em aula, que responde perguntas em linguagem natural sobre os dados). Integrar com "import IA" chamando a função do módulo.
+
+DIFERENCIAL ("Radar Sentinela")
+- Selo de integridade: cada linha de acessos.csv e auditoria.csv termina com um selo calculado a partir do conteúdo + selo da linha anterior (hash encadeado simples, sem hashlib: multiplicar por 131 e somar o código de cada letra, com resto da divisão). Detectar adulteração e avisar no painel inicial e no menu de auditoria.
+- Modo Investigação: responde as 3 perguntas da Ana (quem? de onde veio? já aconteceu antes?) com a linha do tempo da conta.
+- Ranking de risco por usuário (nota 0 a 100 = críticos x25 + suspeitos x10 + falhas x3).
+- Simulador com dados fictícios: criar usuários de demonstração, gerar acessos aleatórios e reproduzir o "Incidente das 3h" (professor com falhas às 3h10, 3h11, 3h12 e sucesso às 3h14 numa máquina comum, mostrando que o sistema avisaria a Ana sem lista de bloqueio).
+- Exportar o relatório para .txt.
+
+ENTREGAS
+A) Versão final completa (6 partes).
+B) Versão parcial funcional para entregar antes: partes 1 a 3 prontas; partes 4 a 6 como TODO com "em desenvolvimento" no menu; sem selo de integridade, sem bloqueio automático e sem critérios avançados (só falha, fora do horário, madrugada e máquina bloqueada); sem funções nem constantes que nunca são usadas.
+
+TESTES
+Rode o código de verdade antes de entregar: cadastro, registro de acesso, alertas, relatório, simulador e detecção de adulteração de arquivo. Confirme que não sobrou função nem constante sem uso e que nenhuma construção proibida foi usada.
